@@ -26,7 +26,7 @@ html,body{margin:0;height:100%;background:#fff;overflow:hidden}
 </head>
 <body>
 <div id="splash"><img src="logo.png" alt="MEDCALL"><div class="sp" id="sp"></div><div id="off">مفيش إنترنت دلوقتي.<br>اتأكد من الاتصال وجرّب تاني.<br><button onclick="location.reload()">جرّب تاني</button></div></div>
-<iframe id="app" title="MEDCALL — عيادة NEPT" allow="clipboard-read; clipboard-write; camera; microphone; fullscreen; geolocation" referrerpolicy="no-referrer-when-downgrade"></iframe>
+<iframe id="app" title="MEDCALL — عيادة NEPT" allow="clipboard-read; clipboard-write; camera; microphone; fullscreen; geolocation"></iframe>
 <script>
 (function(){
   var URL_APP='https://script.google.com/macros/s/AKfycbyhaBIdGhq4e_yinnjFmaNZYL878LjSRn39XKJYaNRNmEZETpc7KHmTjLLqYsavZVjXfA/exec';
@@ -36,6 +36,20 @@ html,body{margin:0;height:100%;background:#fff;overflow:hidden}
   if(!navigator.onLine){ offline(); }
   else { f.addEventListener('load',function(){ setTimeout(hide,600); }); f.src=URL_APP; setTimeout(hide,15000); }
   window.addEventListener('online',function(){ if(!f.src) location.reload(); });
+
+  // Install bridge: the system (inside the frame) asks; this page owns the browser's install prompt.
+  var deferred=null, peers=[];
+  function installed(){ return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; }
+  function okOrigin(o){ return /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.googleusercontent\.com$/.test(o)||o==='https://script.google.com'; }
+  function tell(w,o,extra){ var m={medcall:'pwa',can:!!deferred,installed:installed()}; if(extra) for(var k in extra) m[k]=extra[k]; try{ w.postMessage(m,o); }catch(e){} }
+  function tellAll(extra){ peers.forEach(function(p){ tell(p.w,p.o,extra); }); }
+  window.addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); deferred=e; tellAll(); });
+  window.addEventListener('appinstalled',function(){ deferred=null; tellAll({installed:true}); });
+  window.addEventListener('message',function(e){
+    var d=e.data; if(!d||!okOrigin(e.origin)) return;
+    if(d.medcall==='hello'){ if(!peers.some(function(p){ return p.w===e.source; })) peers.push({w:e.source,o:e.origin}); tell(e.source,e.origin); }
+    else if(d.medcall==='install'&&deferred){ var p=deferred; deferred=null; p.prompt(); p.userChoice.then(function(c){ tellAll({outcome:c.outcome,installed:c.outcome==='accepted'||installed()}); }); }
+  });
   if('serviceWorker' in navigator){ window.addEventListener('load',function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); }); }
 })();
 </script>
